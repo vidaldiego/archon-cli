@@ -30,7 +30,7 @@ interface SshSessionResponse {
 export function registerSshCommands(program: Command): void {
   program
     .command('ssh <machine>')
-    .description('Open interactive SSH session to a machine')
+    .description('Open interactive SSH session to a machine (by name, ID, or IP)')
     .option('-u, --user <username>', 'Override SSH username')
     .option('-i, --identity <id>', 'Use specific identity ID')
     .action(async (machineArg: string, options) => {
@@ -46,7 +46,7 @@ export function registerSshCommands(program: Command): void {
 
         const api = createApiClient(profile.url, token);
 
-        // Find machine by ID or name
+        // Find machine by ID, name, or IP address
         const machines = await withSpinner<Machine[]>(
           'Finding machine...',
           async () => api.get<Machine[]>('/api/machines')
@@ -55,14 +55,15 @@ export function registerSshCommands(program: Command): void {
         const machine = machines.find(m =>
           m.machineId === machineArg ||
           m.name === machineArg ||
-          m.name.toLowerCase() === machineArg.toLowerCase()
+          m.name.toLowerCase() === machineArg.toLowerCase() ||
+          m.primaryIp === machineArg
         );
 
         if (!machine) {
           error(`Machine '${machineArg}' not found`);
           console.log(chalk.gray('\nAvailable machines:'));
           for (const m of machines.slice(0, 10)) {
-            console.log(chalk.gray(`  ${m.name} (${m.machineId})`));
+            console.log(chalk.gray(`  ${m.name} (${m.primaryIp || 'no IP'})`));
           }
           if (machines.length > 10) {
             console.log(chalk.gray(`  ... and ${machines.length - 10} more`));
@@ -97,9 +98,14 @@ export function registerSshCommands(program: Command): void {
         );
 
         // Connect via WebSocket
-        const wsUrl = session.websocketUrl.startsWith('/')
+        const baseWsUrl = session.websocketUrl.startsWith('/')
           ? `${profile.url.replace('http', 'ws')}${session.websocketUrl}`
           : session.websocketUrl;
+
+        // Add token and terminal size as query params
+        const cols = process.stdout.columns || 80;
+        const rows = process.stdout.rows || 24;
+        const wsUrl = `${baseWsUrl}?token=${encodeURIComponent(token)}&cols=${cols}&rows=${rows}`;
 
         console.log(chalk.green(`Connected to ${session.machineName}`));
         console.log(chalk.gray('Press Ctrl+D or type "exit" to close the session\n'));
