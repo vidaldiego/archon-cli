@@ -49,10 +49,12 @@
     "date-fns": "^3.6.0",
     "inquirer": "^9.3.7",
     "jwt-decode": "^4.0.0",
-    "ora": "^8.1.1"
+    "ora": "^8.1.1",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "^4.0.16",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
