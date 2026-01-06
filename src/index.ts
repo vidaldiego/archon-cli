@@ -4,7 +4,8 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { setOutputOptions, OutputFormat } from './output/index.js';
-import { setActiveProfile, getActiveProfileName } from './config/index.js';
+import { setActiveProfile, getActiveProfileName, getActiveProfile } from './config/index.js';
+import { getCurrentVersion, startUpdateCheck, showUpdateNotice } from './utils/version.js';
 
 // Import command registrations
 import { registerProfileCommands } from './commands/profile.js';
@@ -28,9 +29,10 @@ import { registerRawCommand } from './commands/raw.js';
 import { registerExecCommands } from './commands/exec.js';
 
 const program = new Command();
+const version = getCurrentVersion();
 
-// Read version from package.json
-const version = '1.0.0';
+// Start background update check early
+startUpdateCheck();
 
 program
   .name('archon')
@@ -69,11 +71,22 @@ program
       quiet: opts.quiet || false
     });
 
+    // Show version header with profile info (unless quiet mode)
+    if (!opts.quiet) {
+      const activeProfile = getActiveProfileName();
+      const profile = getActiveProfile();
+      const profileDisplay = profile.name || activeProfile;
+      console.error(chalk.gray(`archon v${version} • ${profileDisplay} (${profile.url})`));
+    }
+
     // Debug info
     if (opts.debug) {
-      console.error(chalk.gray(`Profile: ${getActiveProfileName()}`));
       console.error(chalk.gray(`Output: ${format}`));
     }
+  })
+  .hook('postAction', async () => {
+    // Show update notice after command completes
+    await showUpdateNotice();
   });
 
 // Register all commands
