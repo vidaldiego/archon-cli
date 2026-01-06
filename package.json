@@ -1,6 +1,6 @@
 {
   "name": "@zincapp/archon-cli",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "Command-line interface for ARCHON infrastructure management",
   "type": "module",
   "bin": {
