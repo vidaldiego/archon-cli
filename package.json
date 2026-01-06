@@ -1,0 +1,65 @@
+{
+  "name": "@zincapp/archon-cli",
+  "version": "1.0.0",
+  "description": "Command-line interface for ARCHON infrastructure management",
+  "type": "module",
+  "bin": {
+    "archon": "./bin/archon"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "bin"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "archon",
+    "cli",
+    "infrastructure",
+    "rolling-updates",
+    "devops",
+    "automation"
+  ],
+  "author": "ZincApp",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vidaldiego/archon-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vidaldiego/archon-cli/issues"
+  },
+  "homepage": "https://github.com/vidaldiego/archon-cli#readme",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "cli-table3": "^0.6.5",
+    "commander": "^12.1.0",
+    "date-fns": "^3.6.0",
+    "inquirer": "^9.3.7",
+    "jwt-decode": "^4.0.0",
+    "ora": "^8.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^4.0.16",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^4.0.16"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
