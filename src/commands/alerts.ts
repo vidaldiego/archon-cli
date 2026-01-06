@@ -66,10 +66,13 @@ export function registerAlertCommands(program: Command): void {
       try {
         const api = await getAuthenticatedClient();
 
-        const alerts = await withSpinner<Alert[]>(
+        const response = await withSpinner<{ alerts: Alert[] } | Alert[]>(
           'Fetching alerts...',
-          async () => api.get<Alert[]>('/api/alerts')
+          async () => api.get<{ alerts: Alert[] } | Alert[]>('/api/alerts')
         );
+
+        // Handle both wrapped and unwrapped responses
+        const alerts = Array.isArray(response) ? response : response.alerts;
 
         let filtered = alerts;
 
@@ -79,23 +82,26 @@ export function registerAlertCommands(program: Command): void {
           );
         }
         if (options.unread) {
-          filtered = filtered.filter(a => !a.acknowledged);
+          filtered = filtered.filter(a => !a.acknowledgedAt);
         }
         if (options.unresolved) {
-          filtered = filtered.filter(a => !a.resolved);
+          filtered = filtered.filter(a => !a.resolvedAt);
         }
 
         filtered = filtered.slice(0, parseInt(options.limit));
 
-        const items: AlertListItem[] = filtered.map(a => ({
-          id: a.id,
-          severity: a.severity,
-          category: a.category,
-          title: a.title,
-          machine: a.machineName || '',
-          acknowledged: a.acknowledged ? chalk.green('Yes') : chalk.gray('No'),
-          createdAt: format(new Date(a.createdAt), 'MM-dd HH:mm')
-        }));
+        const items: AlertListItem[] = filtered.map(a => {
+          const alertId = a.id;
+          return {
+            id: typeof alertId === 'string' ? parseInt(String(alertId).substring(0, 8), 16) : alertId as number,
+            severity: a.severity,
+            category: a.category,
+            title: a.title,
+            machine: a.machineName || '',
+            acknowledged: a.acknowledgedAt ? chalk.green('Yes') : chalk.gray('No'),
+            createdAt: format(new Date(a.createdAt), 'MM-dd HH:mm')
+          };
+        });
 
         output(items, alertTableConfig);
         console.log(chalk.gray(`\n${items.length} alert(s)`));

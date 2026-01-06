@@ -109,10 +109,13 @@ export function registerSshKeyCommands(program: Command): void {
       try {
         const api = await getAuthenticatedClient();
 
-        const changes = await withSpinner<SshHostKeyChange[]>(
+        const response = await withSpinner<{ changes: SshHostKeyChange[] } | SshHostKeyChange[]>(
           'Fetching key changes...',
-          async () => api.get<SshHostKeyChange[]>('/api/ssh-host-keys/changes')
+          async () => api.get<{ changes: SshHostKeyChange[] } | SshHostKeyChange[]>('/api/ssh-host-keys/changes')
         );
+
+        // Handle both wrapped and unwrapped responses
+        const changes = Array.isArray(response) ? response : response.changes;
 
         if (changes.length === 0) {
           console.log(chalk.gray('No pending key changes.'));
@@ -174,7 +177,8 @@ export function registerSshKeyCommands(program: Command): void {
         const api = await getAuthenticatedClient();
 
         // Get pending changes count
-        const changes = await api.get<SshHostKeyChange[]>('/api/ssh-host-keys/changes');
+        const response = await api.get<{ changes: SshHostKeyChange[] } | SshHostKeyChange[]>('/api/ssh-host-keys/changes');
+        const changes = Array.isArray(response) ? response : response.changes;
 
         if (changes.length === 0) {
           console.log(chalk.gray('No pending key changes.'));

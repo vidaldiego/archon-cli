@@ -157,10 +157,13 @@ export function registerAutoUpdateCommands(program: Command): void {
       try {
         const api = await getAuthenticatedClient();
 
-        const schedules = await withSpinner<AutoUpdateSchedule[]>(
+        const response = await withSpinner<{ schedules: AutoUpdateSchedule[] } | AutoUpdateSchedule[]>(
           'Fetching schedules...',
-          async () => api.get<AutoUpdateSchedule[]>('/api/auto-update/schedules')
+          async () => api.get<{ schedules: AutoUpdateSchedule[] } | AutoUpdateSchedule[]>('/api/auto-update/schedules')
         );
+
+        // Handle both wrapped and unwrapped responses
+        const schedules = Array.isArray(response) ? response : response.schedules;
 
         if (schedules.length === 0) {
           console.log(chalk.gray('No scheduled auto-updates.'));

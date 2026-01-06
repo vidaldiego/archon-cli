@@ -516,10 +516,13 @@ export function registerServiceCommands(program: Command): void {
       try {
         const api = await getAuthenticatedClient();
 
-        const types = await withSpinner<ServiceType[]>(
+        const response = await withSpinner<{ types: ServiceType[] } | ServiceType[]>(
           'Fetching service types...',
-          async () => api.get<ServiceType[]>('/api/service-types')
+          async () => api.get<{ types: ServiceType[] } | ServiceType[]>('/api/service-types')
         );
+
+        // Handle both wrapped and unwrapped responses
+        const types = Array.isArray(response) ? response : response.types;
 
         const items = types.map(t => ({
           id: t.id,

@@ -66,9 +66,9 @@ export function registerVCenterCommands(program: Command): void {
           name: v.name,
           url: v.url,
           enabled: v.enabled ? chalk.green('Yes') : chalk.gray('No'),
-          machines: v.machineCount,
-          lastSync: v.lastSync
-            ? format(new Date(v.lastSync), 'yyyy-MM-dd HH:mm')
+          machines: v.machineCount ?? 0,
+          lastSync: (v.lastSync || v.lastConnectedAt)
+            ? format(new Date(v.lastSync || v.lastConnectedAt!), 'yyyy-MM-dd HH:mm')
             : 'Never'
         }));
 

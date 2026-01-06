@@ -45,24 +45,47 @@ export function registerJobCommands(program: Command): void {
       try {
         const api = await getAuthenticatedClient();
 
-        const stats = await withSpinner<JobStatistics>(
+        // Fetch all jobs and compute stats locally
+        const allJobs = await withSpinner<UpdateJob[]>(
           'Fetching statistics...',
-          async () => api.get<JobStatistics>(`/api/jobs/stats?days=${options.days}`)
+          async () => api.get<UpdateJob[]>('/api/updates')
         );
+
+        const daysAgo = Date.now() - (parseInt(options.days) * 24 * 60 * 60 * 1000);
+        const recentJobs = allJobs.filter(j => j.createdAt >= daysAgo);
+
+        const completed = recentJobs.filter(j => j.status === 'COMPLETED').length;
+        const failed = recentJobs.filter(j => j.status === 'FAILED').length;
+        const cancelled = recentJobs.filter(j => j.status === 'CANCELLED').length;
+
+        // Calculate average duration
+        const completedWithDuration = recentJobs.filter(j =>
+          j.status === 'COMPLETED' && j.startedAt && j.completedAt
+        );
+        const avgDurationMs = completedWithDuration.length > 0
+          ? completedWithDuration.reduce((sum, j) => sum + (j.completedAt! - j.startedAt!), 0) / completedWithDuration.length
+          : 0;
+
+        // Group by service
+        const byService: Record<string, number> = {};
+        for (const job of recentJobs) {
+          const svc = job.serviceDisplayName || job.service;
+          byService[svc] = (byService[svc] || 0) + 1;
+        }
 
         console.log();
         console.log(chalk.bold('Job Statistics') + chalk.gray(` (last ${options.days} days)`));
         console.log();
-        console.log(`  Total:      ${stats.total}`);
-        console.log(`  ${chalk.green('Completed')}: ${stats.completed}`);
-        console.log(`  ${chalk.red('Failed')}:    ${stats.failed}`);
-        console.log(`  ${chalk.gray('Cancelled')}: ${stats.cancelled}`);
-        console.log(`  Avg time:   ${formatDuration(stats.avgDurationMs)}`);
+        console.log(`  Total:      ${recentJobs.length}`);
+        console.log(`  ${chalk.green('Completed')}: ${completed}`);
+        console.log(`  ${chalk.red('Failed')}:    ${failed}`);
+        console.log(`  ${chalk.gray('Cancelled')}: ${cancelled}`);
+        console.log(`  Avg time:   ${formatDuration(avgDurationMs)}`);
 
-        if (Object.keys(stats.byService).length > 0) {
+        if (Object.keys(byService).length > 0) {
           console.log();
           console.log(chalk.bold('By Service'));
-          for (const [service, count] of Object.entries(stats.byService)) {
+          for (const [service, count] of Object.entries(byService)) {
             console.log(`  ${service}: ${count}`);
           }
         }

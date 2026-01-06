@@ -57,9 +57,9 @@ export function registerIdentityCommands(program: Command): void {
           id: i.id,
           name: i.name,
           username: i.username,
-          authType: i.authType,
+          authType: i.authType || i.type || 'UNKNOWN',
           isDefault: i.isDefault ? chalk.green('Yes') : '-',
-          machines: i.machineCount
+          machines: i.machineCount ?? 0
         }));
 
         output(items, identityTableConfig);
@@ -249,7 +249,7 @@ export function registerIdentityCommands(program: Command): void {
         // Get identity details first
         const identity = await api.get<Identity>(`/api/identities/${id}`);
 
-        if (identity.machineCount > 0 && !options.force) {
+        if ((identity.machineCount ?? 0) > 0 && !options.force) {
           error(`Identity '${identity.name}' is assigned to ${identity.machineCount} machine(s).`);
           console.log(chalk.gray('Use --force to delete anyway.'));
           process.exit(1);

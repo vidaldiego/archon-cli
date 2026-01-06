@@ -279,7 +279,7 @@ export interface AutoUpdateRun {
 
 // Alerts
 export interface Alert {
-  id: number;
+  id: number | string;
   severity: 'INFO' | 'WARNING' | 'CRITICAL';
   category: string;
   title: string;
@@ -288,10 +288,10 @@ export interface Alert {
   machineName?: string;
   serviceId?: string;
   serviceName?: string;
-  acknowledged: boolean;
+  acknowledged?: boolean;
   acknowledgedAt?: number;
   acknowledgedBy?: string;
-  resolved: boolean;
+  resolved?: boolean;
   resolvedAt?: number;
   createdAt: number;
 }
@@ -311,9 +311,12 @@ export interface Identity {
   id: number;
   name: string;
   username: string;
-  authType: 'PASSWORD' | 'SSH_KEY';
-  isDefault: boolean;
-  machineCount: number;
+  authType?: 'PASSWORD' | 'SSH_KEY';
+  type?: string; // Alternative field name from API
+  isDefault?: boolean;
+  machineCount?: number;
+  hasSudoPassword?: boolean;
+  createdBy?: number;
   createdAt: number;
 }
 
@@ -325,7 +328,11 @@ export interface VCenter {
   username: string;
   enabled: boolean;
   lastSync?: number;
-  machineCount: number;
+  lastConnectedAt?: number; // Alternative field name from API
+  machineCount?: number;
+  insecureTls?: boolean;
+  createdBy?: number;
+  createdAt?: number;
 }
 
 // Jobs Dashboard
