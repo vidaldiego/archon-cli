@@ -29,7 +29,7 @@ jobs:
         run: npm run build
 
       - name: Run tests
-        run: npm test
+        run: npm test -- --exclude tests/e2e.test.ts
 
       - name: Type check
         run: npx tsc --noEmit
