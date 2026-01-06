@@ -27,6 +27,7 @@ import { registerLogCommands } from './commands/logs.js';
 import { registerJobCommands } from './commands/jobs.js';
 import { registerRawCommand } from './commands/raw.js';
 import { registerExecCommands } from './commands/exec.js';
+import { registerSelfUpdateCommand } from './commands/self-update.js';
 
 const program = new Command();
 const version = getCurrentVersion();
@@ -109,6 +110,7 @@ registerLogCommands(program);
 registerJobCommands(program);
 registerExecCommands(program);
 registerRawCommand(program);
+registerSelfUpdateCommand(program);
 
 // Parse arguments
 program.parse();
