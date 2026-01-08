@@ -40,7 +40,14 @@ function isApiError(err: unknown): err is ApiError {
 function handleApiError(err: ApiError): void {
   switch (err.status) {
     case 401:
-      console.error(chalk.red('Authentication required.'));
+      // Check if this is a token expiration issue
+      if (err.message?.toLowerCase().includes('expired') ||
+          err.message?.toLowerCase().includes('invalid token')) {
+        console.error(chalk.red('Session expired.'));
+        console.error(chalk.gray('Your authentication token has expired.'));
+      } else {
+        console.error(chalk.red('Authentication required.'));
+      }
       console.error(chalk.gray('Run: archon auth login'));
       break;
 
