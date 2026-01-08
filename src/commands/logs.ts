@@ -206,11 +206,21 @@ export function registerLogCommands(program: Command): void {
           }]);
 
           machineId = selectedMachineId;
+          selectedMachine = pathResult.machines.find(m => m.machineId === machineId);
+        } else {
+          // Resolve machine by ID or name
+          selectedMachine = resolveMachine(pathResult.machines, machineId);
+          if (selectedMachine) {
+            machineId = selectedMachine.machineId;
+          }
         }
 
-        selectedMachine = pathResult.machines.find(m => m.machineId === machineId);
         if (!selectedMachine || selectedMachine.logs.length === 0) {
-          error(`No log paths available for machine '${machineId}'`);
+          error(`Machine '${machineIdArg}' not found or has no log paths`);
+          console.log(chalk.gray('\nAvailable machines:'));
+          for (const m of pathResult.machines) {
+            console.log(chalk.gray(`  ${m.machineName} (${m.machineId})`));
+          }
           process.exit(1);
         }
 
@@ -239,7 +249,8 @@ export function registerLogCommands(program: Command): void {
         }
 
         if (options.follow) {
-          await streamServiceLogs(serviceId, machineId!, logPath, options.level?.toUpperCase());
+          // Use numeric serviceId for WebSocket (backend expects integer)
+          await streamServiceLogs(pathResult.serviceId.toString(), machineId!, logPath, options.level?.toUpperCase());
         } else {
           const params = new URLSearchParams();
           params.set('path', logPath);
@@ -359,6 +370,43 @@ async function resolveServiceId(api: ReturnType<typeof createApiClient>, service
 }
 
 /**
+ * Resolve a machine argument to a MachineLogPaths object.
+ * Accepts machine ID or machine name (case-insensitive).
+ */
+function resolveMachine(machines: MachineLogPaths[], machineArg: string): MachineLogPaths | undefined {
+  // Try exact ID match
+  let machine = machines.find(m => m.machineId === machineArg);
+
+  // Try exact name match
+  if (!machine) {
+    machine = machines.find(m => m.machineName === machineArg);
+  }
+
+  // Try case-insensitive ID match
+  if (!machine) {
+    machine = machines.find(m => m.machineId.toLowerCase() === machineArg.toLowerCase());
+  }
+
+  // Try case-insensitive name match
+  if (!machine) {
+    machine = machines.find(m => m.machineName.toLowerCase() === machineArg.toLowerCase());
+  }
+
+  // Try partial match on name or ID
+  if (!machine) {
+    const matches = machines.filter(m =>
+      m.machineName.toLowerCase().includes(machineArg.toLowerCase()) ||
+      m.machineId.toLowerCase().includes(machineArg.toLowerCase())
+    );
+    if (matches.length === 1) {
+      machine = matches[0];
+    }
+  }
+
+  return machine;
+}
+
+/**
  * Interactive log streaming - select service, machine, and log path.
  */
 async function interactiveLogStream(level?: string): Promise<void> {
@@ -463,8 +511,8 @@ async function interactiveLogStream(level?: string): Promise<void> {
     logPath = selectedPath;
   }
 
-  // Start streaming
-  await streamServiceLogs(selectedServiceId, machineId, logPath, level);
+  // Start streaming (use numeric serviceId for WebSocket)
+  await streamServiceLogs(pathResult.serviceId.toString(), machineId, logPath, level);
 }
 
 /**
@@ -546,12 +594,13 @@ async function streamArchonLogs(level?: string): Promise<void> {
     ws.on('error', (err) => {
       cleanup();
       if (!isConnected) {
-        console.error(chalk.red('\nFailed to connect to log stream'));
-        console.error(chalk.gray('The backend may not support WebSocket log streaming'));
+        // WebSocket not available - fall back to polling
+        console.log(chalk.yellow('WebSocket streaming not available, falling back to polling...'));
+        pollArchonLogs(level).then(resolve).catch(reject);
       } else {
         console.error(chalk.red(`\nConnection error: ${err.message}`));
+        reject(err);
       }
-      reject(err);
     });
 
     ws.on('close', () => {
@@ -617,6 +666,9 @@ async function streamServiceLogs(
 
   const wsUrl = `${wsBase}/ws/logs?${params.toString()}`;
 
+  if (process.env.DEBUG) {
+    console.log(chalk.gray(`WebSocket URL: ${wsUrl.replace(/token=[^&]+/, 'token=***')}`));
+  }
   console.log(chalk.gray('Streaming logs... (Press Ctrl+C to stop)\n'));
 
   return new Promise((resolve, reject) => {
@@ -677,12 +729,13 @@ async function streamServiceLogs(
     ws.on('error', (err) => {
       cleanup();
       if (!isConnected) {
-        console.error(chalk.red('\nFailed to connect to log stream'));
-        console.error(chalk.gray('The backend may not support WebSocket log streaming for this service'));
+        // WebSocket not available - fall back to polling
+        console.log(chalk.yellow('WebSocket streaming not available, falling back to polling...'));
+        pollServiceLogs(serviceId, machineId, logPath, level).then(resolve).catch(reject);
       } else {
         console.error(chalk.red(`\nConnection error: ${err.message}`));
+        reject(err);
       }
-      reject(err);
     });
 
     ws.on('close', () => {
@@ -772,4 +825,130 @@ async function getAuthenticatedClient() {
   }
 
   return createApiClient(profile.url, token, profile.insecure);
+}
+
+/**
+ * Poll Archon logs as a fallback when WebSocket is not available.
+ */
+async function pollArchonLogs(level?: string): Promise<void> {
+  const api = await getAuthenticatedClient();
+
+  console.log(chalk.gray('Polling for new logs every 2 seconds... (Press Ctrl+C to stop)\n'));
+
+  let lastTimestamp = '';
+  let running = true;
+
+  const cleanup = () => {
+    running = false;
+  };
+
+  process.on('SIGINT', () => {
+    console.log(chalk.gray('\n\nStopping...'));
+    cleanup();
+  });
+
+  process.on('SIGTERM', cleanup);
+
+  while (running) {
+    try {
+      const params = new URLSearchParams();
+      params.set('lines', '50');
+      if (level) params.set('level', level);
+
+      const result = await api.get<LogResult>(`/api/logs/archon?${params.toString()}`);
+
+      if (result.success && result.entries) {
+        for (const entry of result.entries) {
+          if (entry.timestamp > lastTimestamp) {
+            printLogEntry(entry);
+            lastTimestamp = entry.timestamp;
+          }
+        }
+      }
+    } catch {
+      // Ignore errors during polling
+    }
+
+    // Wait 2 seconds before next poll
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+}
+
+/**
+ * Poll service logs as a fallback when WebSocket is not available.
+ */
+async function pollServiceLogs(
+  serviceId: string,
+  machineId: string,
+  logPath: string,
+  level?: string
+): Promise<void> {
+  const api = await getAuthenticatedClient();
+
+  console.log(chalk.gray('Polling for new logs every 2 seconds... (Press Ctrl+C to stop)\n'));
+
+  let lastTimestamp = '';
+  let running = true;
+
+  const cleanup = () => {
+    running = false;
+  };
+
+  process.on('SIGINT', () => {
+    console.log(chalk.gray('\n\nStopping...'));
+    cleanup();
+  });
+
+  process.on('SIGTERM', cleanup);
+
+  // Get the string service ID for the REST API (not the numeric one used for WebSocket)
+  // We need to look up the service to get the string ID
+  const servicesResponse = await api.get<{ services: Service[] }>('/api/services');
+  const service = servicesResponse.services.find(s => {
+    // Find by numeric ID in the members or by string ID
+    return s.id === serviceId || s.members.some(m => m.machineId === machineId);
+  });
+  const serviceStringId = service?.id || serviceId;
+
+  while (running) {
+    try {
+      const params = new URLSearchParams();
+      params.set('path', logPath);
+      params.set('lines', '50');
+
+      const result = await api.get<LogResult>(
+        `/api/services/${serviceStringId}/logs/${machineId}?${params.toString()}`
+      );
+
+      if (result.success && result.entries) {
+        for (const entry of result.entries) {
+          // Apply level filter if specified
+          if (level && getLogLevelPriority(entry.level) < getLogLevelPriority(level)) {
+            continue;
+          }
+          if (entry.timestamp > lastTimestamp) {
+            printLogEntry(entry);
+            lastTimestamp = entry.timestamp;
+          }
+        }
+      }
+    } catch {
+      // Ignore errors during polling
+    }
+
+    // Wait 2 seconds before next poll
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+}
+
+function getLogLevelPriority(level: string): number {
+  switch (level.toUpperCase()) {
+    case 'TRACE': return 0;
+    case 'DEBUG': return 1;
+    case 'INFO': return 2;
+    case 'WARN':
+    case 'WARNING': return 3;
+    case 'ERROR': return 4;
+    default: return 2;
+  }
 }
